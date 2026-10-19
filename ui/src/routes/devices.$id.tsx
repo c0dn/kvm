@@ -67,7 +67,9 @@ interface CloudLoaderResp {
   deviceName: string;
   user: User | null;
   iceConfig: {
-    iceServers: { credential?: string; urls: string | string[]; username?: string };
+    iceServers:
+      | { credential?: string; urls: string | string[]; username?: string }
+      | { credential?: string; urls: string | string[]; username?: string }[];
   } | null;
 }
 
@@ -268,10 +270,10 @@ export default function KvmIdRoute() {
   );
 
   // We only use STUN or TURN servers if we're in the cloud
-  const iceServers = useMemo(
-    () => (isInCloud && iceConfig?.iceServers ? [iceConfig.iceServers] : undefined),
-    [iceConfig?.iceServers],
-  );
+  const iceServers = useMemo(() => {
+    if (!isInCloud || !iceConfig?.iceServers) return undefined;
+    return Array.isArray(iceConfig.iceServers) ? iceConfig.iceServers : [iceConfig.iceServers];
+  }, [iceConfig?.iceServers, isInCloud]);
 
   const {
     connect: setupPeerConnection,
