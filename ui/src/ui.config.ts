@@ -4,6 +4,11 @@ const toBoolean = (value: string | undefined) => {
 };
 export const CLOUD_API = import.meta.env.VITE_CLOUD_API;
 
+// Self-hosted cloud APIs may use any OIDC provider. Defaults keep the
+// upstream Google sign-in endpoint and button.
+export const CLOUD_OIDC_PATH = import.meta.env.VITE_CLOUD_OIDC_PATH || "/oidc/google";
+export const CLOUD_OIDC_IS_GOOGLE = (import.meta.env.VITE_CLOUD_OIDC_PROVIDER || "google") === "google";
+
 export const CLOUD_BACKWARDS_COMPATIBLE_VERSION =
   import.meta.env.VITE_CLOUD_BACKWARDS_COMPATIBLE_VERSION || "0.5.0";
 

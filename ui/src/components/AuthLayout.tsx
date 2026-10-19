@@ -7,7 +7,7 @@ import Container from "@components/Container";
 import Fieldset from "@components/Fieldset";
 import GridBackground from "@components/GridBackground";
 import StepCounter from "@components/StepCounter";
-import { CLOUD_API } from "@/ui.config";
+import { CLOUD_API, CLOUD_OIDC_IS_GOOGLE, CLOUD_OIDC_PATH } from "@/ui.config";
 
 interface AuthLayoutProps {
   title: string;
@@ -61,7 +61,7 @@ export default function AuthLayout({
 
               <Fieldset className="space-y-12">
                 <div className="mx-auto max-w-sm space-y-4">
-                  <form action={`${CLOUD_API}/oidc/google`} method="POST">
+                  <form action={`${CLOUD_API}${CLOUD_OIDC_PATH}`} method="POST">
                     {/*This could be the KVM ID*/}
                     {deviceId ? <input type="hidden" name="deviceId" value={deviceId} /> : null}
                     {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
@@ -70,13 +70,13 @@ export default function AuthLayout({
                       theme="light"
                       fullWidth
                       text={`${action}`}
-                      LeadingIcon={GoogleIcon}
+                      LeadingIcon={CLOUD_OIDC_IS_GOOGLE ? GoogleIcon : undefined}
                       textAlign="center"
                       type="submit"
                       loading={
                         (navigation.state === "submitting" || navigation.state === "loading") &&
                         navigation.formMethod?.toLowerCase() === "post" &&
-                        navigation.formAction?.includes("auth/google")
+                        navigation.formAction?.includes(CLOUD_OIDC_PATH)
                       }
                     />
                   </form>
