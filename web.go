@@ -108,7 +108,11 @@ const (
 func setupRouter() *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	gin.DisableConsoleColor()
-	r := gin.Default()
+	// gin.Default includes a logger that records the raw query string. The
+	// one-time /adopt callback carries temporary and OIDC tokens in that query,
+	// so use recovery plus the structured logger below instead.
+	r := gin.New()
+	r.Use(gin.Recovery())
 	// The device is reached directly, not behind a reverse proxy, so don't
 	// trust any X-Forwarded-For/X-Real-IP headers. Without this, gin trusts
 	// all proxies by default and c.ClientIP() returns a client-controlled
@@ -119,6 +123,11 @@ func setupRouter() *gin.Engine {
 	r.Use(gin_logger.SetLogger(
 		gin_logger.WithLogger(func(*gin.Context, zerolog.Logger) zerolog.Logger {
 			return *ginLogger
+		}),
+		// The adopt URL includes short-lived credentials. Do not log it: the
+		// handler's success/failure is visible in cloud registration logs.
+		gin_logger.WithSkipper(func(c *gin.Context) bool {
+			return c.Request.URL.Path == "/adopt"
 		}),
 	))
 
