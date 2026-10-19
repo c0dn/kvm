@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	stdsync "sync"
 	"time"
 
 	"github.com/jetkvm/kvm/internal/sync"
@@ -443,7 +444,7 @@ func authenticateSession(ctx context.Context, c *websocket.Conn, req WebRTCSessi
 	if issuer == "" {
 		issuer = "https://accounts.google.com"
 	}
-	provider, err := oidc.NewProvider(oidcCtx, issuer)
+	provider, err := cachedOIDCProvider(oidcCtx, issuer)
 	if err != nil {
 		_ = wsjson.Write(context.Background(), c, gin.H{
 			"error": fmt.Sprintf("failed to initialize OIDC provider: %v", err),
@@ -480,6 +481,25 @@ func authenticateSession(ctx context.Context, c *websocket.Conn, req WebRTCSessi
 	}
 
 	return nil
+}
+
+// oidcProviders caches discovered providers per issuer. A Provider keeps its
+// JWKS cached and refreshes it on unknown key IDs, so reusing it avoids a
+// discovery round trip and a JWKS fetch on every cloud session request.
+var oidcProviders stdsync.Map // issuer -> *oidc.Provider
+
+func cachedOIDCProvider(ctx context.Context, issuer string) (*oidc.Provider, error) {
+	if p, ok := oidcProviders.Load(issuer); ok {
+		return p.(*oidc.Provider), nil
+	}
+	// ctx only bounds discovery; the provider's JWKS key set uses its own
+	// background context, so the cached provider outlives this request.
+	provider, err := oidc.NewProvider(ctx, issuer)
+	if err != nil {
+		return nil, err
+	}
+	actual, _ := oidcProviders.LoadOrStore(issuer, provider)
+	return actual.(*oidc.Provider), nil
 }
 
 func oidcIdentity(idToken *oidc.IDToken) (string, error) {

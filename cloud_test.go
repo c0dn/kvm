@@ -4,6 +4,7 @@ package kvm
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -298,4 +300,52 @@ func signTestIDToken(
 		t.Fatalf("failed to serialize ID token: %v", err)
 	}
 	return token
+}
+
+func TestCachedOIDCProviderReusesDiscovery(t *testing.T) {
+	var discoveries atomic.Int32
+	var issuerURL string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
+		discoveries.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"issuer":   issuerURL,
+			"jwks_uri": issuerURL + "/jwks",
+		})
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	issuerURL = server.URL
+	t.Cleanup(func() { oidcProviders.Delete(issuerURL) })
+
+	for range 3 {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		p, err := cachedOIDCProvider(ctx, issuerURL)
+		cancel()
+		if err != nil || p == nil {
+			t.Fatalf("cachedOIDCProvider() = %v, %v", p, err)
+		}
+	}
+	if got := discoveries.Load(); got != 1 {
+		t.Fatalf("discovery requests = %d, want 1", got)
+	}
+}
+
+func TestCachedOIDCProviderDoesNotCacheFailures(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		http.Error(w, "down", http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(server.Close)
+
+	for range 2 {
+		if _, err := cachedOIDCProvider(context.Background(), server.URL); err == nil {
+			t.Fatal("expected discovery error")
+		}
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("discovery attempts = %d, want 2", got)
+	}
 }
