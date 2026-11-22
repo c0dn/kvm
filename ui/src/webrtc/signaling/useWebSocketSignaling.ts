@@ -8,6 +8,7 @@ import { useRTCStore, useUiStore } from "@hooks/stores";
 import { useDeviceUiNavigation } from "@hooks/useAppNavigation";
 import { m } from "@localizations/messages.js";
 import { isLinuxDesktop } from "@/utils";
+import { iceCandidateAddress, isTailnetAddress } from "@/utils/ip";
 
 import type { SignalingHook } from "./types";
 
@@ -337,6 +338,14 @@ export const useWebSocketSignaling: SignalingHook = ({
         } else if (parsedMessage.type === "new-ice-candidate") {
           console.debug("[Websocket] Received new-ice-candidate");
           const candidate = parsedMessage.data;
+          // In the cloud, skip the device's Tailscale addresses. A browser on
+          // the same tailnet otherwise selects that host pair, and when
+          // Tailscale has no direct path the video runs through a DERP relay.
+          // TURN covers networks where a direct path fails.
+          if (!isOnDevice && isTailnetAddress(iceCandidateAddress(candidate?.candidate ?? ""))) {
+            console.debug("[Websocket] Skipping tailnet ICE candidate");
+            return;
+          }
           void peerConnection.addIceCandidate(candidate).catch(error => {
             if (isCurrentPeer(peerConnection)) {
               console.warn("[Websocket] Failed to add ICE candidate", error);

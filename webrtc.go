@@ -451,6 +451,15 @@ func newSession(config SessionConfig) (*Session, error) {
 	}
 
 	if config.IsCloud {
+		// Leave overlay VPN interfaces out of cloud sessions. A browser on the
+		// same tailnet otherwise selects the Tailscale host pair, and without a
+		// direct tailnet path the media then runs through a DERP relay. Local
+		// sessions keep them: a browser may reach the device only over the
+		// tailnet, and those sessions have no STUN or TURN fallback.
+		webrtcSettingEngine.SetInterfaceFilter(func(name string) bool {
+			return !strings.HasPrefix(name, "tailscale")
+		})
+
 		if config.ICEServers == nil {
 			scopedLogger.Info().Msg("ICE Servers not provided by cloud")
 		} else {
