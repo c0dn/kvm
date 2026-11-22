@@ -40,6 +40,9 @@ function stripH265FromVideoTransceivers(pc: RTCPeerConnection) {
   }
 }
 
+// How long an ICE "failed" state may last before the session is abandoned.
+const ICE_FAILED_GRACE_MS = 5000;
+
 const reconnectInterval = (attempt: number) => {
   // Exponential backoff with a max of 10 seconds between attempts
   return Math.min(500 * 2 ** attempt, 10000);
@@ -479,11 +482,18 @@ export const useWebSocketSignaling: SignalingHook = ({
     setPeerConnectionState,
   ]);
 
+  // Chrome reports "failed" as soon as every known pair has failed, while the
+  // device may still be trickling candidates. With a fast TURN allocation,
+  // the relay pairs to the device's private host addresses fail first and its
+  // public srflx candidate arrives about 100 ms later, after which ICE
+  // recovers. Give up only if the connection is still failed after a grace.
   useEffect(() => {
-    if (peerConnectionState === "failed") {
+    if (peerConnectionState !== "failed") return;
+    const timer = setTimeout(() => {
       console.warn("Connection failed, closing peer connection");
       cleanupAndStopReconnecting();
-    }
+    }, ICE_FAILED_GRACE_MS);
+    return () => clearTimeout(timer);
   }, [peerConnectionState, cleanupAndStopReconnecting]);
 
   useEffect(() => {
