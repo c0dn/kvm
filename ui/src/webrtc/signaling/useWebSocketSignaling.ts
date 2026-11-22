@@ -341,11 +341,10 @@ export const useWebSocketSignaling: SignalingHook = ({
         } else if (parsedMessage.type === "new-ice-candidate") {
           console.debug("[Websocket] Received new-ice-candidate");
           const candidate = parsedMessage.data;
-          // In the cloud, skip the device's Tailscale addresses. A browser on
-          // the same tailnet otherwise selects that host pair, and when
-          // Tailscale has no direct path the video runs through a DERP relay.
-          // TURN covers networks where a direct path fails.
-          if (!isOnDevice && isTailnetAddress(iceCandidateAddress(candidate?.candidate ?? ""))) {
+          // Skip the device's Tailscale addresses. A browser on the same
+          // tailnet otherwise selects that host pair, and when Tailscale has
+          // no direct path the video runs through a DERP relay.
+          if (isTailnetAddress(iceCandidateAddress(candidate?.candidate ?? ""))) {
             console.debug("[Websocket] Skipping tailnet ICE candidate");
             return;
           }
